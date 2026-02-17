@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/ZakirAlekperov/GoTechPasport/internal/domain/entity"
@@ -39,13 +40,13 @@ type App struct {
 
 // GeneralInfoFields поля общих сведений
 type GeneralInfoFields struct {
-	orgName         *widget.Entry
-	purpose         *widget.Entry
-	usage           *widget.Entry
-	year            *widget.Entry
-	totalArea       *widget.Entry
-	livingArea      *widget.Entry
-	floors          *widget.Entry
+	orgName           *widget.Entry
+	purpose           *widget.Entry
+	usage             *widget.Entry
+	year              *widget.Entry
+	totalArea         *widget.Entry
+	livingArea        *widget.Entry
+	floors            *widget.Entry
 	undergroundFloors *widget.Entry
 }
 
@@ -63,23 +64,23 @@ type AddressFields struct {
 
 // UtilitiesFields поля благоустройства
 type UtilitiesFields struct {
-	waterCentral    *widget.Entry
-	waterAutonomous *widget.Entry
-	sewerageCentral *widget.Entry
-	sewerageAutonomous *widget.Entry
-	heatingCentral  *widget.Entry
-	heatingAutonomous *widget.Entry
-	gasCentral      *widget.Entry
-	gasAutonomous   *widget.Entry
-	electricityCentral *widget.Entry
+	waterCentral          *widget.Entry
+	waterAutonomous       *widget.Entry
+	sewerageCentral       *widget.Entry
+	sewerageAutonomous    *widget.Entry
+	heatingCentral        *widget.Entry
+	heatingAutonomous     *widget.Entry
+	gasCentral            *widget.Entry
+	gasAutonomous         *widget.Entry
+	electricityCentral    *widget.Entry
 	electricityAutonomous *widget.Entry
 }
 
 func main() {
 	// Инициализируем приложение
 	app := &App{
-		fyneApp:  app.New(),
-		repo:     memory.NewInMemoryPassportRepository(),
+		fyneApp:   app.New(),
+		repo:      memory.NewInMemoryPassportRepository(),
 		buildings: []entity.Building{},
 		owners:    []entity.Owner{},
 		rooms:     []entity.Room{},
@@ -89,6 +90,10 @@ func main() {
 
 	// Создаем новый пустой паспорт для редактирования
 	app.initNewPassport()
+
+	// Создаем меню
+	menu := app.createMenu()
+	app.window.SetMainMenu(menu)
 
 	// Создаем интерфейс с вкладками
 	tabs := app.createTabs()
@@ -100,7 +105,7 @@ func main() {
 	content := container.NewBorder(toolbar, nil, nil, nil, tabs)
 
 	app.window.SetContent(content)
-	app.window.Resize(fyne.NewSize(900, 700))
+	app.window.Resize(fyne.NewSize(1000, 700))
 	app.window.ShowAndRun()
 }
 
@@ -112,17 +117,62 @@ func (a *App) initNewPassport() {
 	)
 }
 
+// createMenu создает главное меню
+func (a *App) createMenu() *fyne.MainMenu {
+	fileMenu := fyne.NewMenu("Файл",
+		fyne.NewMenuItem("Новый", func() {
+			a.createNewPassport()
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Сохранить", func() {
+			a.savePassport()
+		}),
+		fyne.NewMenuItem("Открыть...", func() {
+			a.openPassport()
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Экспорт в PDF", func() {
+			dialog.ShowInformation("В разработке", "Функция экспорта будет реализована на следующем этапе", a.window)
+		}),
+		fyne.NewMenuItem("Экспорт в Word", func() {
+			dialog.ShowInformation("В разработке", "Функция экспорта будет реализована на следующем этапе", a.window)
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Выход", func() {
+			a.fyneApp.Quit()
+		}),
+	)
+
+	helpMenu := fyne.NewMenu("Справка",
+		fyne.NewMenuItem("О программе", func() {
+			dialog.ShowInformation("О GoTechPasport",
+				"GoTechPasport v0.1\n\nПриложение для генерации технических паспортов недвижимости.\n\n© 2026 Zakir Alekperov",
+				a.window)
+		}),
+	)
+
+	return fyne.NewMainMenu(fileMenu, helpMenu)
+}
+
 // createToolbar создает панель инструментов
 func (a *App) createToolbar() *widget.Toolbar {
 	return widget.NewToolbar(
-		widget.NewToolbarAction(widget.NewIcon(nil), func() {
+		widget.NewToolbarAction(theme.DocumentCreateIcon(), func() {
 			a.createNewPassport()
 		}),
-		widget.NewToolbarSeparator(),
-		widget.NewToolbarAction(widget.NewIcon(nil), func() {
+		widget.NewToolbarAction(theme.DocumentSaveIcon(), func() {
 			a.savePassport()
 		}),
+		widget.NewToolbarAction(theme.FolderOpenIcon(), func() {
+			a.openPassport()
+		}),
+		widget.NewToolbarSeparator(),
 		widget.NewToolbarSpacer(),
+		widget.NewToolbarAction(theme.HelpIcon(), func() {
+			dialog.ShowInformation("Справка",
+				"Используйте вкладки для заполнения разделов паспорта.\nНажмите 'Сохранить' для сохранения данных.",
+				a.window)
+		}),
 	)
 }
 
@@ -231,7 +281,9 @@ func (a *App) createBuildingsTab() fyne.CanvasObject {
 		dialog.ShowInformation("В разработке", "Форма добавления здания будет реализована на следующем этапе", a.window)
 	})
 
-	return container.NewBorder(nil, addBtn, nil, nil, a.buildingsList)
+	info := widget.NewLabel("Список зданий и сооружений в составе объекта")
+
+	return container.NewBorder(info, addBtn, nil, nil, a.buildingsList)
 }
 
 // createOwnersTab создает вкладку "Правообладатели"
@@ -253,7 +305,9 @@ func (a *App) createOwnersTab() fyne.CanvasObject {
 		dialog.ShowInformation("В разработке", "Форма добавления владельца будет реализована на следующем этапе", a.window)
 	})
 
-	return container.NewBorder(nil, addBtn, nil, nil, a.ownersList)
+	info := widget.NewLabel("Список правообладателей объекта недвижимости")
+
+	return container.NewBorder(info, addBtn, nil, nil, a.ownersList)
 }
 
 // createRoomsTab создает вкладку "Экспликация"
@@ -272,7 +326,9 @@ func (a *App) createRoomsTab() fyne.CanvasObject {
 		dialog.ShowInformation("В разработке", "Форма добавления помещения будет реализована на следующем этапе", a.window)
 	})
 
-	return container.NewBorder(nil, addBtn, nil, nil, a.roomsList)
+	info := widget.NewLabel("Экспликация помещений (расшифровка площадей)")
+
+	return container.NewBorder(info, addBtn, nil, nil, a.roomsList)
 }
 
 // createUtilitiesTab создает вкладку "Благоустройство"
@@ -290,18 +346,29 @@ func (a *App) createUtilitiesTab() fyne.CanvasObject {
 		electricityAutonomous: widget.NewEntry(),
 	}
 
+	a.utilitiesFields.waterCentral.SetPlaceHolder("0.0")
+	a.utilitiesFields.waterAutonomous.SetPlaceHolder("0.0")
+	a.utilitiesFields.sewerageCentral.SetPlaceHolder("0.0")
+	a.utilitiesFields.sewerageAutonomous.SetPlaceHolder("0.0")
+	a.utilitiesFields.heatingCentral.SetPlaceHolder("0.0")
+	a.utilitiesFields.heatingAutonomous.SetPlaceHolder("0.0")
+	a.utilitiesFields.gasCentral.SetPlaceHolder("0.0")
+	a.utilitiesFields.gasAutonomous.SetPlaceHolder("0.0")
+	a.utilitiesFields.electricityCentral.SetPlaceHolder("0.0")
+	a.utilitiesFields.electricityAutonomous.SetPlaceHolder("0.0")
+
 	form := &widget.Form{
 		Items: []*widget.FormItem{
-			{Text: "Водоснабжение (централизованное):", Widget: a.utilitiesFields.waterCentral},
-			{Text: "Водоснабжение (автономное):", Widget: a.utilitiesFields.waterAutonomous},
-			{Text: "Канализация (централизованная):", Widget: a.utilitiesFields.sewerageCentral},
-			{Text: "Канализация (автономная):", Widget: a.utilitiesFields.sewerageAutonomous},
-			{Text: "Отопление (централизованное):", Widget: a.utilitiesFields.heatingCentral},
-			{Text: "Отопление (автономное):", Widget: a.utilitiesFields.heatingAutonomous},
-			{Text: "Газоснабжение (централизованное):", Widget: a.utilitiesFields.gasCentral},
-			{Text: "Газоснабжение (автономное):", Widget: a.utilitiesFields.gasAutonomous},
-			{Text: "Электроснабжение (централизованное):", Widget: a.utilitiesFields.electricityCentral},
-			{Text: "Электроснабжение (автономное):", Widget: a.utilitiesFields.electricityAutonomous},
+			{Text: "Водоснабжение (центр. кв.м):", Widget: a.utilitiesFields.waterCentral},
+			{Text: "Водоснабжение (автон. кв.м):", Widget: a.utilitiesFields.waterAutonomous},
+			{Text: "Канализация (центр. кв.м):", Widget: a.utilitiesFields.sewerageCentral},
+			{Text: "Канализация (автон. кв.м):", Widget: a.utilitiesFields.sewerageAutonomous},
+			{Text: "Отопление (центр. кв.м):", Widget: a.utilitiesFields.heatingCentral},
+			{Text: "Отопление (автон. кв.м):", Widget: a.utilitiesFields.heatingAutonomous},
+			{Text: "Газоснабжение (центр. кв.м):", Widget: a.utilitiesFields.gasCentral},
+			{Text: "Газоснабжение (автон. кв.м):", Widget: a.utilitiesFields.gasAutonomous},
+			{Text: "Электроснабжение (центр. кв.м):", Widget: a.utilitiesFields.electricityCentral},
+			{Text: "Электроснабжение (автон. кв.м):", Widget: a.utilitiesFields.electricityAutonomous},
 		},
 	}
 
@@ -310,8 +377,8 @@ func (a *App) createUtilitiesTab() fyne.CanvasObject {
 
 // createNewPassport создает новый паспорт
 func (a *App) createNewPassport() {
-	dialog.ShowConfirm("Новый паспорт", 
-		"Создать новый паспорт? Несохраненные данные будут потеряны.", 
+	dialog.ShowConfirm("Новый паспорт",
+		"Создать новый паспорт? Несохраненные данные будут потеряны.",
 		func(confirmed bool) {
 			if confirmed {
 				a.initNewPassport()
@@ -355,6 +422,47 @@ func (a *App) savePassport() {
 	dialog.ShowInformation("Успех", msg, a.window)
 }
 
+// openPassport открывает список паспортов
+func (a *App) openPassport() {
+	ctx := context.Background()
+	passports, err := a.repo.List(ctx)
+
+	if err != nil {
+		dialog.ShowError(err, a.window)
+		return
+	}
+
+	if len(passports) == 0 {
+		dialog.ShowInformation("Информация", "Список паспортов пуст.\nСоздайте новый паспорт.", a.window)
+		return
+	}
+
+	// Создаем список для выбора
+	var items []string
+	for _, p := range passports {
+		item := fmt.Sprintf("%s - %s", p.ID, p.Address.FullAddress())
+		items = append(items, item)
+	}
+
+	// Показываем список
+	list := widget.NewList(
+		func() int { return len(items) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(id widget.ListItemID, obj fyne.CanvasObject) {
+			obj.(*widget.Label).SetText(items[id])
+		},
+	)
+
+	list.OnSelected = func(id widget.ListItemID) {
+		// TODO: Загрузить паспорт в форму
+		dialog.ShowInformation("В разработке",
+			"Загрузка паспорта будет реализована на следующем этапе",
+			a.window)
+	}
+
+	dialog.ShowCustom("Открыть паспорт", "Закрыть", list, a.window)
+}
+
 // collectDataFromFields собирает данные из всех полей формы
 func (a *App) collectDataFromFields() error {
 	// Организация
@@ -392,7 +500,7 @@ func (a *App) collectDataFromFields() error {
 		FloorsUnderground: undergroundFloors,
 	}
 
-	// TODO: Utilities
+	// TODO: Собрать данные о Utilities
 
 	return nil
 }
@@ -418,6 +526,18 @@ func (a *App) clearAllFields() {
 	a.addressFields.house.SetText("")
 	a.addressFields.building.SetText("")
 	a.addressFields.apartment.SetText("")
+
+	// Utilities
+	a.utilitiesFields.waterCentral.SetText("")
+	a.utilitiesFields.waterAutonomous.SetText("")
+	a.utilitiesFields.sewerageCentral.SetText("")
+	a.utilitiesFields.sewerageAutonomous.SetText("")
+	a.utilitiesFields.heatingCentral.SetText("")
+	a.utilitiesFields.heatingAutonomous.SetText("")
+	a.utilitiesFields.gasCentral.SetText("")
+	a.utilitiesFields.gasAutonomous.SetText("")
+	a.utilitiesFields.electricityCentral.SetText("")
+	a.utilitiesFields.electricityAutonomous.SetText("")
 
 	// Очищаем списки
 	a.buildings = []entity.Building{}
