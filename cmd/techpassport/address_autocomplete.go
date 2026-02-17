@@ -16,7 +16,7 @@ type AddressAutocomplete struct {
 	widget.Entry
 	dadataClient    *dadata.Client
 	suggestionsList *widget.List
-	popup           *widget.PopUp
+	popupContainer  *fyne.Container
 	window          fyne.Window
 	suggestions     []dadata.Suggestion
 	onSelected      func(dadata.Suggestion)
@@ -46,10 +46,14 @@ func NewAddressAutocomplete(
 			return len(aa.suggestions)
 		},
 		func() fyne.CanvasObject {
-			return widget.NewLabel("")
+			label := widget.NewLabel("")
+			label.Wrapping = fyne.TextWrapOff
+			return label
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			obj.(*widget.Label).SetText(aa.suggestions[id].Value)
+			if id < len(aa.suggestions) {
+				obj.(*widget.Label).SetText(aa.suggestions[id].Value)
+			}
 		},
 	)
 
@@ -57,25 +61,23 @@ func NewAddressAutocomplete(
 		if id < len(aa.suggestions) {
 			selected := aa.suggestions[id]
 			aa.SetText(selected.Value)
-			if aa.popup != nil {
-				aa.popup.Hide()
-			}
+			aa.hidePopup()
 			if aa.onSelected != nil {
 				aa.onSelected(selected)
 			}
+			// Возвращаем фокус на поле ввода
+			aa.window.Canvas().Focus(aa)
 		}
 	}
 
 	// Обработчик изменения текста
 	aa.OnChanged = func(text string) {
 		if len(text) < 2 {
-			if aa.popup != nil {
-				aa.popup.Hide()
-			}
+			aa.hidePopup()
 			return
 		}
 
-		// Получаем подсказки
+		// Получаем подсказки асинхронно
 		go aa.fetchSuggestions(text)
 	}
 
@@ -94,31 +96,60 @@ func (aa *AddressAutocomplete) fetchSuggestions(query string) {
 
 	if len(suggestions) > 0 {
 		aa.showPopup()
-	} else if aa.popup != nil {
-		aa.popup.Hide()
+	} else {
+		aa.hidePopup()
 	}
 }
 
 func (aa *AddressAutocomplete) showPopup() {
-	if aa.popup == nil {
-		// Создаем контейнер с ограниченной высотой
-		content := container.NewMax(aa.suggestionsList)
-		aa.popup = widget.NewPopUp(content, aa.window.Canvas())
+	if aa.popupContainer == nil {
+		// Создаем контейнер для popup
+		aa.popupContainer = container.NewMax(aa.suggestionsList)
 	}
 
-	// Располагаем popup под полем ввода
-	canvasPos := fyne.CurrentApp().Driver().AbsolutePositionForObject(&aa.Entry)
-	aa.popup.ShowAtPosition(fyne.NewPos(
-		canvasPos.X,
-		canvasPos.Y+aa.Size().Height,
-	))
+	// Вычисляем позицию popup относительно поля ввода
+	canvas := aa.window.Canvas()
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(aa)
+	size := aa.Size()
 
-	// Устанавливаем размер
-	aa.popup.Resize(fyne.NewSize(
-		aa.Size().Width,
-		fyne.Min(200, float32(len(aa.suggestions))*40),
-	))
+	// Показываем overlay с подсказками под полем ввода
+	if len(aa.suggestions) > 0 {
+		// Создаем новый overlay каждый раз для правильного позиционирования
+		popupHeight := fyne.Min(200, float32(len(aa.suggestions))*35)
+		popupSize := fyne.NewSize(size.Width, popupHeight)
+		
+		// Позиция под полем ввода
+		popupPos := fyne.NewPos(pos.X, pos.Y+size.Height)
+
+		// Удаляем старый overlay если есть
+		aa.hidePopup()
+
+		// Создаем новый popup
+		aa.popupContainer = container.NewMax(aa.suggestionsList)
+		
+		// Создаем и показываем popup в правильной позиции
+		overlay := canvas.Overlays()
+		if overlay != nil {
+			popup := widget.NewPopUp(aa.popupContainer, canvas)
+			popup.ShowAtPosition(popupPos)
+			popup.Resize(popupSize)
+			
+			// Сохраняем ссылку для последующего скрытия
+			// Используем глобальную переменную для хранения текущего popup
+			currentPopup = popup
+		}
+	}
 }
+
+func (aa *AddressAutocomplete) hidePopup() {
+	if currentPopup != nil {
+		currentPopup.Hide()
+		currentPopup = nil
+	}
+}
+
+// Глобальная переменная для отслеживания текущего popup
+var currentPopup *widget.PopUp
 
 // AddressFormDaData форма адреса с DaData
 type AddressFormDaData struct {
