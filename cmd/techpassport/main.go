@@ -30,7 +30,7 @@ type App struct {
 
 	// Поля форм для всех вкладок
 	generalFields   *GeneralInfoFields
-	addressFields   *AddressFields
+	addressForm     *AddressFormDaData // Новая форма с DaData
 	buildingsList   *widget.List
 	buildings       []entity.Building
 	ownersList      *widget.List
@@ -50,18 +50,6 @@ type GeneralInfoFields struct {
 	livingArea        *widget.Entry
 	floors            *widget.Entry
 	undergroundFloors *widget.Entry
-}
-
-// AddressFields поля адреса
-type AddressFields struct {
-	subject      *widget.Entry
-	district     *widget.Entry
-	city         *widget.Entry
-	cityDistrict *widget.Entry
-	street       *widget.Entry
-	house        *widget.Entry
-	building     *widget.Entry
-	apartment    *widget.Entry
 }
 
 // UtilitiesFields поля благоустройства
@@ -155,7 +143,7 @@ func (a *App) createMenu() *fyne.MainMenu {
 	helpMenu := fyne.NewMenu("Справка",
 		fyne.NewMenuItem("О программе", func() {
 			dialog.ShowInformation("О GoTechPasport",
-				"GoTechPasport v0.1\n\nПриложение для генерации технических паспортов недвижимости.\n\nСогласно Приказу Минэкономразвития РФ от 17 августа 2006 г. № 244\n\n© 2026 Zakir Alekperov",
+				"GoTechPasport v0.2\n\nПриложение для генерации технических паспортов недвижимости.\n\nСогласно Приказу Минэкономразвития РФ от 17 августа 2006 г. № 244\n\nИнтеграция с DaData для валидации адресов\n\n© 2026 Zakir Alekperov",
 				a.window)
 		}),
 	)
@@ -179,7 +167,7 @@ func (a *App) createToolbar() *widget.Toolbar {
 		widget.NewToolbarSpacer(),
 		widget.NewToolbarAction(theme.HelpIcon(), func() {
 			dialog.ShowInformation("Справка",
-				"Используйте вкладки для заполнения разделов паспорта.\nНажмите 'Сохранить' для сохранения данных.",
+				"Используйте вкладки для заполнения разделов паспорта.\nВкладка 'Адрес' использует подсказки DaData для предотвращения ошибок.\nНачните вводить регион, затем город, улицу и дом.\n\nНажмите 'Сохранить' для сохранения данных.",
 				a.window)
 		}),
 	)
@@ -189,7 +177,7 @@ func (a *App) createToolbar() *widget.Toolbar {
 func (a *App) createTabs() *container.AppTabs {
 	return container.NewAppTabs(
 		container.NewTabItem("Общие сведения", a.createGeneralInfoTab()),
-		container.NewTabItem("Адрес", a.createAddressTab()),
+		container.NewTabItem("Адрес 🔍", a.createAddressTab()),
 		container.NewTabItem("Состав объекта", a.createBuildingsTab()),
 		container.NewTabItem("Правообладатели", a.createOwnersTab()),
 		container.NewTabItem("Экспликация", a.createRoomsTab()),
@@ -235,42 +223,20 @@ func (a *App) createGeneralInfoTab() fyne.CanvasObject {
 	return container.NewVScroll(form)
 }
 
-// createAddressTab создает вкладку "Адрес"
+// createAddressTab создает вкладку "Адрес" с DaData
 func (a *App) createAddressTab() fyne.CanvasObject {
-	a.addressFields = &AddressFields{
-		subject:      widget.NewEntry(),
-		district:     widget.NewEntry(),
-		city:         widget.NewEntry(),
-		cityDistrict: widget.NewEntry(),
-		street:       widget.NewEntry(),
-		house:        widget.NewEntry(),
-		building:     widget.NewEntry(),
-		apartment:    widget.NewEntry(),
-	}
+	a.addressForm = NewAddressFormDaData(a.window)
 
-	a.addressFields.subject.SetPlaceHolder("Например: г. Москва")
-	a.addressFields.district.SetPlaceHolder("Например: Центральный АО")
-	a.addressFields.city.SetPlaceHolder("Например: Москва")
-	a.addressFields.cityDistrict.SetPlaceHolder("Например: Тверской район")
-	a.addressFields.street.SetPlaceHolder("Например: ул. Тверская")
-	a.addressFields.house.SetPlaceHolder("Например: 1")
-	a.addressFields.building.SetPlaceHolder("Например: корп. 2")
-	a.addressFields.apartment.SetPlaceHolder("Например: 10")
+	infoLabel := widget.NewLabel("💡 Используйте подсказки DaData для точного ввода адреса")
+	infoLabel.Wrapping = fyne.TextWrapWord
 
-	form := &widget.Form{
-		Items: []*widget.FormItem{
-			{Text: "Субъект РФ:", Widget: a.addressFields.subject},
-			{Text: "Административный район:", Widget: a.addressFields.district},
-			{Text: "Город:", Widget: a.addressFields.city},
-			{Text: "Район города:", Widget: a.addressFields.cityDistrict},
-			{Text: "Улица:", Widget: a.addressFields.street},
-			{Text: "Дом:", Widget: a.addressFields.house},
-			{Text: "Строение/корпус:", Widget: a.addressFields.building},
-			{Text: "Квартира:", Widget: a.addressFields.apartment},
-		},
-	}
+	form := a.addressForm.CreateForm()
 
-	return container.NewVScroll(form)
+	return container.NewBorder(
+		infoLabel,
+		nil, nil, nil,
+		container.NewVScroll(form),
+	)
 }
 
 // createBuildingsTab создает вкладку "Состав объекта"
@@ -592,16 +558,15 @@ func (a *App) collectDataFromFields() error {
 	// Организация
 	a.currentPassport.OrganizationName = a.generalFields.orgName.Text
 
-	// Адрес
+	// Адрес из DaData формы
+	addressData := a.addressForm.GetAddressData()
 	a.currentPassport.Address = entity.Address{
-		Subject:      a.addressFields.subject.Text,
-		District:     a.addressFields.district.Text,
-		City:         a.addressFields.city.Text,
-		CityDistrict: a.addressFields.cityDistrict.Text,
-		Street:       a.addressFields.street.Text,
-		House:        a.addressFields.house.Text,
-		Building:     a.addressFields.building.Text,
-		Apartment:    a.addressFields.apartment.Text,
+		Subject: addressData["subject"],
+		City:    addressData["city"],
+		Street:  addressData["street"],
+		House:   addressData["house"],
+		Building: addressData["building"],
+		Apartment: addressData["apartment"],
 	}
 
 	// Общие сведения
@@ -641,15 +606,8 @@ func (a *App) clearAllFields() {
 	a.generalFields.floors.SetText("")
 	a.generalFields.undergroundFloors.SetText("")
 
-	// Адрес
-	a.addressFields.subject.SetText("")
-	a.addressFields.district.SetText("")
-	a.addressFields.city.SetText("")
-	a.addressFields.cityDistrict.SetText("")
-	a.addressFields.street.SetText("")
-	a.addressFields.house.SetText("")
-	a.addressFields.building.SetText("")
-	a.addressFields.apartment.SetText("")
+	// Адрес - создаем новую форму
+	a.addressForm = NewAddressFormDaData(a.window)
 
 	// Utilities
 	a.utilitiesFields.waterCentral.SetText("")
