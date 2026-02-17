@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -60,10 +61,12 @@ func NewAddressAutocomplete(
 	aa.suggestionsList.OnSelected = func(id widget.ListItemID) {
 		if id < len(aa.suggestions) {
 			selected := aa.suggestions[id]
-			aa.SetText(selected.Value)
 			
-			// Сразу скрываем popup
+			// ВАЖНО: Сначала скрываем popup
 			aa.hidePopup()
+			
+			// Потом устанавливаем текст
+			aa.SetText(selected.Value)
 			
 			if aa.onSelected != nil {
 				aa.onSelected(selected)
@@ -152,7 +155,7 @@ type AddressFormDaData struct {
 	selectedCityFiasID   string
 	selectedStreetFiasID string
 
-	// Полный выбранный адрес
+	// Полный выбранный адрес с данными DaData
 	selectedAddress *dadata.Suggestion
 }
 
@@ -172,6 +175,7 @@ func NewAddressFormDaData(window fyne.Window) *AddressFormDaData {
 		},
 		func(suggestion dadata.Suggestion) {
 			form.selectedRegionFiasID = suggestion.Data.RegionFiasID
+			form.selectedAddress = &suggestion
 			form.cityField.SetText("")
 			form.streetField.SetText("")
 			form.houseField.SetText("")
@@ -192,6 +196,7 @@ func NewAddressFormDaData(window fyne.Window) *AddressFormDaData {
 			if form.selectedCityFiasID == "" {
 				form.selectedCityFiasID = suggestion.Data.SettlementFiasID
 			}
+			form.selectedAddress = &suggestion
 			form.streetField.SetText("")
 			form.houseField.SetText("")
 			log.Printf("Выбран город: %s", suggestion.Value)
@@ -208,6 +213,7 @@ func NewAddressFormDaData(window fyne.Window) *AddressFormDaData {
 		},
 		func(suggestion dadata.Suggestion) {
 			form.selectedStreetFiasID = suggestion.Data.StreetFiasID
+			form.selectedAddress = &suggestion
 			form.houseField.SetText("")
 			log.Printf("Выбрана улица: %s", suggestion.Value)
 		},
@@ -260,57 +266,115 @@ func (f *AddressFormDaData) GetAddressData() map[string]string {
 	}
 }
 
-// GetFullAddress возвращает полный адрес строкой
+// GetFullAddress возвращает полный адрес согласно официальным правилам
+// Формат: Страна, Индекс, Субъект РФ, Район, Город, Населенный пункт, Улица, Дом, Корпус, Квартира
 func (f *AddressFormDaData) GetFullAddress() string {
-	address := ""
+	var parts []string
 	
-	if f.regionField.Text != "" {
-		address += f.regionField.Text
-	}
-	
-	if f.cityField.Text != "" {
-		if address != "" {
-			address += ", "
+	// Если есть полный адрес от DaData, используем его структурированные данные
+	if f.selectedAddress != nil {
+		data := f.selectedAddress.Data
+		
+		// Страна
+		if data.Country != "" {
+			parts = append(parts, data.Country)
 		}
-		address += f.cityField.Text
-	}
-	
-	if f.streetField.Text != "" {
-		if address != "" {
-			address += ", "
+		
+		// Индекс
+		if data.PostalCode != "" {
+			parts = append(parts, data.PostalCode)
 		}
-		address += f.streetField.Text
-	}
-	
-	if f.houseField.Text != "" {
-		if address != "" {
-			address += ", "
+		
+		// Субъект РФ (регион с типом)
+		if data.RegionWithType != "" {
+			parts = append(parts, data.RegionWithType)
 		}
-		address += "д. " + f.houseField.Text
-	}
-	
-	if f.buildingField.Text != "" {
-		if address != "" {
-			address += ", "
+		
+		// Район
+		if data.AreaWithType != "" {
+			parts = append(parts, data.AreaWithType)
 		}
-		address += "корп. " + f.buildingField.Text
-	}
-	
-	if f.apartmentField.Text != "" {
-		if address != "" {
-			address += ", "
+		
+		// Город
+		if data.CityWithType != "" {
+			parts = append(parts, data.CityWithType)
+		} else if data.SettlementWithType != "" {
+			// Или населенный пункт если город не указан
+			parts = append(parts, data.SettlementWithType)
 		}
-		address += "кв. " + f.apartmentField.Text
+		
+		// Внутригородская территория
+		if data.CityDistrict != "" {
+			parts = append(parts, data.CityDistrict)
+		}
+		
+		// Улица с типом
+		if data.StreetWithType != "" {
+			parts = append(parts, data.StreetWithType)
+		}
+		
+		// Дом
+		if data.House != "" {
+			housePart := "д. " + data.House
+			if data.HouseType != "" && data.HouseType != "д" {
+				housePart = data.HouseTypeFull + " " + data.House
+			}
+			parts = append(parts, housePart)
+		}
+		
+		// Корпус/строение
+		if data.Block != "" {
+			blockPart := "корп. " + data.Block
+			if data.BlockType != "" && data.BlockType != "к" {
+				blockPart = data.BlockTypeFull + " " + data.Block
+			}
+			parts = append(parts, blockPart)
+		} else if f.buildingField.Text != "" {
+			// Или из ручного ввода
+			parts = append(parts, "корп. "+f.buildingField.Text)
+		}
+		
+		// Квартира
+		if data.Flat != "" {
+			flatPart := "кв. " + data.Flat
+			if data.FlatType != "" && data.FlatType != "кв" {
+				flatPart = data.FlatTypeFull + " " + data.Flat
+			}
+			parts = append(parts, flatPart)
+		} else if f.apartmentField.Text != "" {
+			// Или из ручного ввода
+			parts = append(parts, "кв. "+f.apartmentField.Text)
+		}
+	} else {
+		// Если нет данных от DaData, используем ручной ввод
+		if f.regionField.Text != "" {
+			parts = append(parts, f.regionField.Text)
+		}
+		if f.cityField.Text != "" {
+			parts = append(parts, f.cityField.Text)
+		}
+		if f.streetField.Text != "" {
+			parts = append(parts, f.streetField.Text)
+		}
+		if f.houseField.Text != "" {
+			parts = append(parts, "д. "+f.houseField.Text)
+		}
+		if f.buildingField.Text != "" {
+			parts = append(parts, "корп. "+f.buildingField.Text)
+		}
+		if f.apartmentField.Text != "" {
+			parts = append(parts, "кв. "+f.apartmentField.Text)
+		}
 	}
 	
-	return address
+	return strings.Join(parts, ", ")
 }
 
 // UpdateFullAddressLabel обновляет метку с полным адресом
 func (f *AddressFormDaData) UpdateFullAddressLabel() {
 	fullAddress := f.GetFullAddress()
 	if fullAddress != "" {
-		f.fullAddressLabel.SetText("📍 Полный адрес: " + fullAddress)
+		f.fullAddressLabel.SetText("📍 Полный адрес:\n" + fullAddress)
 	} else {
 		f.fullAddressLabel.SetText("Адрес будет отображен после заполнения полей")
 	}
@@ -330,7 +394,7 @@ func (f *AddressFormDaData) CreateForm() fyne.CanvasObject {
 	}
 
 	// Кнопка сохранить
-	saveButton := widget.NewButton("💾 Сохранить адрес", func() {
+	saveButton := widget.NewButton("💾 Сформировать адрес", func() {
 		f.UpdateFullAddressLabel()
 	})
 
