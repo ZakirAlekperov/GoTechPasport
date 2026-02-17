@@ -279,11 +279,11 @@ func (a *App) createBuildingsTab() fyne.CanvasObject {
 		func() int { return len(a.buildings) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			obj.(*widget.Label).SetText(fmt.Sprintf("Лит. %s - %s (%.2f кв.м, %d эт.)",
+			obj.(*widget.Label).SetText(fmt.Sprintf("Лит. %s - %s (%.2f кв.м, %d г.)",
 				a.buildings[id].Litera,
 				a.buildings[id].Name,
 				a.buildings[id].TotalArea,
-				a.buildings[id].FloorsAboveGround))
+				a.buildings[id].CommissionYear))
 		},
 	)
 
@@ -315,17 +315,14 @@ func (a *App) showAddBuildingDialog() {
 	name := widget.NewEntry()
 	name.SetPlaceHolder("Например: Жилой дом")
 
-	purpose := widget.NewEntry()
-	purpose.SetPlaceHolder("Например: Жилое")
-
-	constructionYear := widget.NewEntry()
-	constructionYear.SetPlaceHolder("Например: 2020")
+	commissionYear := widget.NewEntry()
+	commissionYear.SetPlaceHolder("Например: 2020")
 
 	totalArea := widget.NewEntry()
 	totalArea.SetPlaceHolder("Например: 100.5")
 
-	floors := widget.NewEntry()
-	floors.SetPlaceHolder("Например: 2")
+	height := widget.NewEntry()
+	height.SetPlaceHolder("Например: 6.0")
 
 	wallMaterial := widget.NewEntry()
 	wallMaterial.SetPlaceHolder("Например: Кирпич")
@@ -335,10 +332,9 @@ func (a *App) showAddBuildingDialog() {
 		Items: []*widget.FormItem{
 			{Text: "Литера *:", Widget: litera},
 			{Text: "Наименование *:", Widget: name},
-			{Text: "Назначение *:", Widget: purpose},
-			{Text: "Год постройки *:", Widget: constructionYear},
+			{Text: "Год ввода в эксплуатацию *:", Widget: commissionYear},
 			{Text: "Общая площадь (кв.м) *:", Widget: totalArea},
-			{Text: "Этажность надземная *:", Widget: floors},
+			{Text: "Высота (м):", Widget: height},
 			{Text: "Материал стен:", Widget: wallMaterial},
 		},
 	}
@@ -352,21 +348,20 @@ func (a *App) showAddBuildingDialog() {
 		func(confirmed bool) {
 			if confirmed {
 				// Парсим данные
-				var year, floorsInt int
-				var area float64
+				var year int
+				var area, heightVal float64
 
-				fmt.Sscanf(constructionYear.Text, "%d", &year)
+				fmt.Sscanf(commissionYear.Text, "%d", &year)
 				fmt.Sscanf(totalArea.Text, "%f", &area)
-				fmt.Sscanf(floors.Text, "%d", &floorsInt)
+				fmt.Sscanf(height.Text, "%f", &heightVal)
 
 				building := entity.Building{
-					Litera:            litera.Text,
-					Name:              name.Text,
-					Purpose:           purpose.Text,
-					ConstructionYear:  year,
-					TotalArea:         area,
-					FloorsAboveGround: floorsInt,
-					WallMaterial:      wallMaterial.Text,
+					Litera:         litera.Text,
+					Name:           name.Text,
+					CommissionYear: year,
+					TotalArea:      area,
+					Height:         heightVal,
+					WallMaterial:   wallMaterial.Text,
 				}
 
 				// Добавляем в локальный список (если паспорт еще не сохранен)

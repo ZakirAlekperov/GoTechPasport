@@ -40,12 +40,11 @@ func TestAddBuildingUseCase_Execute(t *testing.T) {
 				return passport.AddBuildingInput{
 					PassportID: id,
 					Building: entity.Building{
-						Litera:          "А",
-						Name:            "Жилой дом",
-						Purpose:         "Жилое",
-						TotalArea:       100.5,
-						FloorsAboveGround: 2,
-						ConstructionYear: 2020,
+						Litera:         "А",
+						Name:           "Жилой дом",
+						CommissionYear: 2020,
+						TotalArea:      100.5,
+						WallMaterial:   "Кирпич",
 					},
 				}
 			},
