@@ -50,8 +50,8 @@ type TechnicalPassport struct {
 	Utilities Utilities `json:"utilities"`
 
 	// 6-7. Поэтажные планы и экспликация
-	FloorPlans []string `json:"floor_plans,omitempty"`  // пути к файлам
-	Explication []Room `json:"explication"`
+	FloorPlans  []string `json:"floor_plans,omitempty"`  // пути к файлам
+	Explication []Room   `json:"explication"`
 
 	// История изменений
 	AuditLog []AuditEntry `json:"audit_log,omitempty"`
@@ -86,11 +86,7 @@ func (tp *TechnicalPassport) IsValid() error {
 		return err
 	}
 
-	// Проверка зданий
-	if len(tp.Buildings) == 0 {
-		return ValidationError{Field: "buildings", Message: "должно быть хотя бы одно здание"}
-	}
-
+	// Проверка зданий (если есть)
 	for i, building := range tp.Buildings {
 		if err := building.IsValid(); err != nil {
 			return ValidationError{
@@ -100,11 +96,7 @@ func (tp *TechnicalPassport) IsValid() error {
 		}
 	}
 
-	// Проверка владельцев
-	if len(tp.Owners) == 0 {
-		return ValidationError{Field: "owners", Message: "должен быть хотя бы один правообладатель"}
-	}
-
+	// Проверка владельцев (если есть)
 	for i, owner := range tp.Owners {
 		if err := owner.IsValid(); err != nil {
 			return ValidationError{
@@ -119,7 +111,7 @@ func (tp *TechnicalPassport) IsValid() error {
 		return err
 	}
 
-	// Проверка экспликации
+	// Проверка экспликации (если есть)
 	for i, room := range tp.Explication {
 		if err := room.IsValid(); err != nil {
 			return ValidationError{
@@ -127,6 +119,25 @@ func (tp *TechnicalPassport) IsValid() error {
 				Message: err.Error(),
 			}
 		}
+	}
+
+	return nil
+}
+
+// IsComplete проверяет что паспорт полностью заполнен для экспорта
+func (tp *TechnicalPassport) IsComplete() error {
+	// Базовая валидация
+	if err := tp.IsValid(); err != nil {
+		return err
+	}
+
+	// Для полного паспорта нужны здания и владельцы
+	if len(tp.Buildings) == 0 {
+		return ValidationError{Field: "buildings", Message: "должно быть хотя бы одно здание"}
+	}
+
+	if len(tp.Owners) == 0 {
+		return ValidationError{Field: "owners", Message: "должен быть хотя бы один правообладатель"}
 	}
 
 	return nil
