@@ -16,7 +16,7 @@ type AddressAutocomplete struct {
 	widget.Entry
 	dadataClient    *dadata.Client
 	suggestionsList *widget.List
-	popupContainer  *fyne.Container
+	popup           *widget.PopUp
 	window          fyne.Window
 	suggestions     []dadata.Suggestion
 	onSelected      func(dadata.Suggestion)
@@ -61,12 +61,13 @@ func NewAddressAutocomplete(
 		if id < len(aa.suggestions) {
 			selected := aa.suggestions[id]
 			aa.SetText(selected.Value)
+			
+			// Сразу скрываем popup
 			aa.hidePopup()
+			
 			if aa.onSelected != nil {
 				aa.onSelected(selected)
 			}
-			// Возвращаем фокус на поле ввода
-			aa.window.Canvas().Focus(aa)
 		}
 	}
 
@@ -79,6 +80,15 @@ func NewAddressAutocomplete(
 
 		// Получаем подсказки асинхронно
 		go aa.fetchSuggestions(text)
+	}
+
+	// Обработчик потери фокуса - скрываем popup
+	aa.OnFocusLost = func() {
+		// Небольшая задержка чтобы успел сработать клик по списку
+		go func() {
+			// time.Sleep(200 * time.Millisecond)
+			aa.hidePopup()
+		}()
 	}
 
 	return aa
@@ -102,54 +112,37 @@ func (aa *AddressAutocomplete) fetchSuggestions(query string) {
 }
 
 func (aa *AddressAutocomplete) showPopup() {
-	if aa.popupContainer == nil {
-		// Создаем контейнер для popup
-		aa.popupContainer = container.NewMax(aa.suggestionsList)
-	}
+	// Скрываем предыдущий popup если есть
+	aa.hidePopup()
 
 	// Вычисляем позицию popup относительно поля ввода
 	canvas := aa.window.Canvas()
 	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(aa)
 	size := aa.Size()
 
-	// Показываем overlay с подсказками под полем ввода
-	if len(aa.suggestions) > 0 {
-		// Создаем новый overlay каждый раз для правильного позиционирования
-		popupHeight := fyne.Min(200, float32(len(aa.suggestions))*35)
-		popupSize := fyne.NewSize(size.Width, popupHeight)
-		
-		// Позиция под полем ввода
-		popupPos := fyne.NewPos(pos.X, pos.Y+size.Height)
+	// Создаем контейнер для списка
+	content := container.NewMax(aa.suggestionsList)
+	
+	// Создаем popup
+	aa.popup = widget.NewPopUp(content, canvas)
+	
+	// Позиция под полем ввода
+	popupPos := fyne.NewPos(pos.X, pos.Y+size.Height)
+	
+	// Высота popup в зависимости от количества подсказок
+	popupHeight := fyne.Min(200, float32(len(aa.suggestions))*35)
+	popupSize := fyne.NewSize(size.Width, popupHeight)
 
-		// Удаляем старый overlay если есть
-		aa.hidePopup()
-
-		// Создаем новый popup
-		aa.popupContainer = container.NewMax(aa.suggestionsList)
-		
-		// Создаем и показываем popup в правильной позиции
-		overlay := canvas.Overlays()
-		if overlay != nil {
-			popup := widget.NewPopUp(aa.popupContainer, canvas)
-			popup.ShowAtPosition(popupPos)
-			popup.Resize(popupSize)
-			
-			// Сохраняем ссылку для последующего скрытия
-			// Используем глобальную переменную для хранения текущего popup
-			currentPopup = popup
-		}
-	}
+	aa.popup.ShowAtPosition(popupPos)
+	aa.popup.Resize(popupSize)
 }
 
 func (aa *AddressAutocomplete) hidePopup() {
-	if currentPopup != nil {
-		currentPopup.Hide()
-		currentPopup = nil
+	if aa.popup != nil {
+		aa.popup.Hide()
+		aa.popup = nil
 	}
 }
-
-// Глобальная переменная для отслеживания текущего popup
-var currentPopup *widget.PopUp
 
 // AddressFormDaData форма адреса с DaData
 type AddressFormDaData struct {
@@ -161,6 +154,7 @@ type AddressFormDaData struct {
 	houseField     *AddressAutocomplete
 	buildingField  *widget.Entry
 	apartmentField *widget.Entry
+	fullAddressLabel *widget.Label
 
 	// Сохраненные FIAS ID для каскадной фильтрации
 	selectedRegionFiasID string
@@ -256,24 +250,84 @@ func NewAddressFormDaData(window fyne.Window) *AddressFormDaData {
 	form.apartmentField = widget.NewEntry()
 	form.apartmentField.SetPlaceHolder("Квартира")
 
+	// Метка для отображения полного адреса
+	form.fullAddressLabel = widget.NewLabel("Адрес будет отображен после сохранения")
+	form.fullAddressLabel.Wrapping = fyne.TextWrapWord
+
 	return form
 }
 
 // GetAddressData возвращает заполненные данные адреса
 func (f *AddressFormDaData) GetAddressData() map[string]string {
 	return map[string]string{
-		"subject":  f.regionField.Text,
-		"city":     f.cityField.Text,
-		"street":   f.streetField.Text,
-		"house":    f.houseField.Text,
-		"building": f.buildingField.Text,
+		"subject":   f.regionField.Text,
+		"city":      f.cityField.Text,
+		"street":    f.streetField.Text,
+		"house":     f.houseField.Text,
+		"building":  f.buildingField.Text,
 		"apartment": f.apartmentField.Text,
 	}
 }
 
+// GetFullAddress возвращает полный адрес строкой
+func (f *AddressFormDaData) GetFullAddress() string {
+	address := ""
+	
+	if f.regionField.Text != "" {
+		address += f.regionField.Text
+	}
+	
+	if f.cityField.Text != "" {
+		if address != "" {
+			address += ", "
+		}
+		address += f.cityField.Text
+	}
+	
+	if f.streetField.Text != "" {
+		if address != "" {
+			address += ", "
+		}
+		address += f.streetField.Text
+	}
+	
+	if f.houseField.Text != "" {
+		if address != "" {
+			address += ", "
+		}
+		address += "д. " + f.houseField.Text
+	}
+	
+	if f.buildingField.Text != "" {
+		if address != "" {
+			address += ", "
+		}
+		address += "корп. " + f.buildingField.Text
+	}
+	
+	if f.apartmentField.Text != "" {
+		if address != "" {
+			address += ", "
+		}
+		address += "кв. " + f.apartmentField.Text
+	}
+	
+	return address
+}
+
+// UpdateFullAddressLabel обновляет метку с полным адресом
+func (f *AddressFormDaData) UpdateFullAddressLabel() {
+	fullAddress := f.GetFullAddress()
+	if fullAddress != "" {
+		f.fullAddressLabel.SetText("📍 Полный адрес: " + fullAddress)
+	} else {
+		f.fullAddressLabel.SetText("Адрес будет отображен после заполнения полей")
+	}
+}
+
 // CreateForm создает визуальную форму
-func (f *AddressFormDaData) CreateForm() *widget.Form {
-	return &widget.Form{
+func (f *AddressFormDaData) CreateForm() fyne.CanvasObject {
+	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "Регион *:", Widget: f.regionField},
 			{Text: "Город/Населенный пункт *:", Widget: f.cityField},
@@ -283,4 +337,20 @@ func (f *AddressFormDaData) CreateForm() *widget.Form {
 			{Text: "Квартира:", Widget: f.apartmentField},
 		},
 	}
+
+	// Кнопка сохранить
+	saveButton := widget.NewButton("💾 Сохранить адрес", func() {
+		f.UpdateFullAddressLabel()
+	})
+
+	return container.NewBorder(
+		nil,
+		container.NewVBox(
+			saveButton,
+			widget.NewSeparator(),
+			f.fullAddressLabel,
+		),
+		nil, nil,
+		form,
+	)
 }
