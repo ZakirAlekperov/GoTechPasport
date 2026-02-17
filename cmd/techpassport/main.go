@@ -22,6 +22,8 @@ type App struct {
 	window   fyne.Window
 	repo     *memory.InMemoryPassportRepository
 	createUC *passport.CreatePassportUseCase
+	addBuildingUC *passport.AddBuildingUseCase
+	removeBuildingUC *passport.RemoveBuildingUseCase
 
 	// Текущий редактируемый паспорт
 	currentPassport *entity.TechnicalPassport
@@ -79,7 +81,7 @@ type UtilitiesFields struct {
 func main() {
 	// Инициализируем приложение
 	myApp := app.New()
-	
+
 	// Устанавливаем светлую тему
 	myApp.Settings().SetTheme(theme.LightTheme())
 
@@ -91,6 +93,8 @@ func main() {
 		rooms:     []entity.Room{},
 	}
 	app.createUC = passport.NewCreatePassportUseCase(app.repo)
+	app.addBuildingUC = passport.NewAddBuildingUseCase(app.repo)
+	app.removeBuildingUC = passport.NewRemoveBuildingUseCase(app.repo)
 	app.window = app.fyneApp.NewWindow("Технический паспорт недвижимости")
 
 	// Создаем новый пустой паспорт для редактирования
@@ -275,20 +279,130 @@ func (a *App) createBuildingsTab() fyne.CanvasObject {
 		func() int { return len(a.buildings) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			obj.(*widget.Label).SetText(fmt.Sprintf("%s - %s (%.2f кв.м)",
+			obj.(*widget.Label).SetText(fmt.Sprintf("Лит. %s - %s (%.2f кв.м, %d эт.)",
 				a.buildings[id].Litera,
 				a.buildings[id].Name,
-				a.buildings[id].TotalArea))
+				a.buildings[id].TotalArea,
+				a.buildings[id].FloorsAboveGround))
 		},
 	)
 
 	addBtn := widget.NewButton("Добавить здание", func() {
-		dialog.ShowInformation("В разработке", "Форма добавления здания будет реализована на следующем этапе", a.window)
+		a.showAddBuildingDialog()
+	})
+
+	removeBtn := widget.NewButton("Удалить", func() {
+		if len(a.buildings) == 0 {
+			dialog.ShowInformation("Информация", "Список зданий пуст", a.window)
+			return
+		}
+		// TODO: реализовать выбор здания для удаления
+		dialog.ShowInformation("В разработке", "Выберите здание в списке для удаления", a.window)
 	})
 
 	info := widget.NewLabel("Список зданий и сооружений в составе объекта")
+	buttonBox := container.NewHBox(addBtn, removeBtn)
 
-	return container.NewBorder(info, addBtn, nil, nil, a.buildingsList)
+	return container.NewBorder(info, buttonBox, nil, nil, a.buildingsList)
+}
+
+// showAddBuildingDialog показывает диалог добавления здания
+func (a *App) showAddBuildingDialog() {
+	// Поля формы
+	litera := widget.NewEntry()
+	litera.SetPlaceHolder("Например: А")
+
+	name := widget.NewEntry()
+	name.SetPlaceHolder("Например: Жилой дом")
+
+	purpose := widget.NewEntry()
+	purpose.SetPlaceHolder("Например: Жилое")
+
+	constructionYear := widget.NewEntry()
+	constructionYear.SetPlaceHolder("Например: 2020")
+
+	totalArea := widget.NewEntry()
+	totalArea.SetPlaceHolder("Например: 100.5")
+
+	floors := widget.NewEntry()
+	floors.SetPlaceHolder("Например: 2")
+
+	wallMaterial := widget.NewEntry()
+	wallMaterial.SetPlaceHolder("Например: Кирпич")
+
+	// Форма
+	form := &widget.Form{
+		Items: []*widget.FormItem{
+			{Text: "Литера *:", Widget: litera},
+			{Text: "Наименование *:", Widget: name},
+			{Text: "Назначение *:", Widget: purpose},
+			{Text: "Год постройки *:", Widget: constructionYear},
+			{Text: "Общая площадь (кв.м) *:", Widget: totalArea},
+			{Text: "Этажность надземная *:", Widget: floors},
+			{Text: "Материал стен:", Widget: wallMaterial},
+		},
+	}
+
+	// Диалог
+	dlg := dialog.NewCustomConfirm(
+		"Добавить здание",
+		"Добавить",
+		"Отмена",
+		container.NewVScroll(form),
+		func(confirmed bool) {
+			if confirmed {
+				// Парсим данные
+				var year, floorsInt int
+				var area float64
+
+				fmt.Sscanf(constructionYear.Text, "%d", &year)
+				fmt.Sscanf(totalArea.Text, "%f", &area)
+				fmt.Sscanf(floors.Text, "%d", &floorsInt)
+
+				building := entity.Building{
+					Litera:            litera.Text,
+					Name:              name.Text,
+					Purpose:           purpose.Text,
+					ConstructionYear:  year,
+					TotalArea:         area,
+					FloorsAboveGround: floorsInt,
+					WallMaterial:      wallMaterial.Text,
+				}
+
+				// Добавляем в локальный список (если паспорт еще не сохранен)
+				if a.currentPassport.ID == "" {
+					// Паспорт еще не сохранен - добавляем в локальный список
+					a.buildings = append(a.buildings, building)
+					a.buildingsList.Refresh()
+					dialog.ShowInformation("Успех", "Здание добавлено", a.window)
+				} else {
+					// Паспорт сохранен - используем use case
+					input := passport.AddBuildingInput{
+						PassportID: a.currentPassport.ID,
+						Building:   building,
+					}
+
+					ctx := context.Background()
+					output, err := a.addBuildingUC.Execute(ctx, input)
+
+					if err != nil {
+						dialog.ShowError(err, a.window)
+						return
+					}
+
+					// Обновляем текущий паспорт и список
+					a.currentPassport = output.Passport
+					a.buildings = output.Passport.Buildings
+					a.buildingsList.Refresh()
+					dialog.ShowInformation("Успех", "Здание добавлено в паспорт", a.window)
+				}
+			}
+		},
+		a.window,
+	)
+
+	dlg.Resize(fyne.NewSize(500, 400))
+	dlg.Show()
 }
 
 // createOwnersTab создает вкладку "Правообладатели"
@@ -420,9 +534,19 @@ func (a *App) savePassport() {
 	// Обновляем текущий паспорт
 	a.currentPassport = output.Passport
 
-	msg := fmt.Sprintf("Технический паспорт успешно сохранен!\n\nID: %s\nАдрес: %s",
+	// Добавляем все здания из локального списка
+	for _, building := range a.buildings {
+		buildingInput := passport.AddBuildingInput{
+			PassportID: a.currentPassport.ID,
+			Building:   building,
+		}
+		a.addBuildingUC.Execute(ctx, buildingInput)
+	}
+
+	msg := fmt.Sprintf("Технический паспорт успешно сохранен!\n\nID: %s\nАдрес: %s\nЗданий: %d",
 		output.Passport.ID,
-		output.Passport.Address.FullAddress())
+		output.Passport.Address.FullAddress(),
+		len(a.buildings))
 
 	dialog.ShowInformation("Успех", msg, a.window)
 }
