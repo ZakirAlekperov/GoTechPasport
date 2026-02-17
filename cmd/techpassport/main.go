@@ -78,8 +78,13 @@ type UtilitiesFields struct {
 
 func main() {
 	// Инициализируем приложение
+	myApp := app.New()
+	
+	// Устанавливаем светлую тему
+	myApp.Settings().SetTheme(theme.LightTheme())
+
 	app := &App{
-		fyneApp:   app.New(),
+		fyneApp:   myApp,
 		repo:      memory.NewInMemoryPassportRepository(),
 		buildings: []entity.Building{},
 		owners:    []entity.Owner{},
@@ -146,7 +151,7 @@ func (a *App) createMenu() *fyne.MainMenu {
 	helpMenu := fyne.NewMenu("Справка",
 		fyne.NewMenuItem("О программе", func() {
 			dialog.ShowInformation("О GoTechPasport",
-				"GoTechPasport v0.1\n\nПриложение для генерации технических паспортов недвижимости.\n\n© 2026 Zakir Alekperov",
+				"GoTechPasport v0.1\n\nПриложение для генерации технических паспортов недвижимости.\n\nСогласно Приказу Минэкономразвития РФ от 17 августа 2006 г. № 244\n\n© 2026 Zakir Alekperov",
 				a.window)
 		}),
 	)
