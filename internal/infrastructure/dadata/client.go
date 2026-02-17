@@ -101,7 +101,8 @@ type AddressData struct {
 	StreetTypeFull   string `json:"street_type_full"`
 	Street           string `json:"street"`
 	HouseFiasID      string `json:"house_fias_id"`
-	HouseKladrID     string `json:"house_kladr_id"`	HouseType        string `json:"house_type"`
+	HouseKladrID     string `json:"house_kladr_id"`
+	HouseType        string `json:"house_type"`
 	HouseTypeFull    string `json:"house_type_full"`
 	House            string `json:"house"`
 	BlockType        string `json:"block_type"`
