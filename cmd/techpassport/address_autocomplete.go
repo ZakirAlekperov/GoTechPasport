@@ -82,15 +82,6 @@ func NewAddressAutocomplete(
 		go aa.fetchSuggestions(text)
 	}
 
-	// Обработчик потери фокуса - скрываем popup
-	aa.OnFocusLost = func() {
-		// Небольшая задержка чтобы успел сработать клик по списку
-		go func() {
-			// time.Sleep(200 * time.Millisecond)
-			aa.hidePopup()
-		}()
-	}
-
 	return aa
 }
 
